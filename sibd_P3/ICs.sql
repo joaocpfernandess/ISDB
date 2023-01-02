@@ -14,7 +14,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE CONSTRAINT TRIGGER check_mandatory_sailor_senior_or_junior_insert
-AFTER INSERT ON sailor DEFERRABLE
+AFTER INSERT OR DELETE ON sailor DEFERRABLE
 FOR EACH ROW EXECUTE PROCEDURE check_mandatory_sailor_senior_or_junior_insert();
 
 
