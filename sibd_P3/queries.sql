@@ -15,7 +15,7 @@ FROM sailor S INNER JOIN sailing_certificate SC on S.email=SC.sailor
 GROUP BY S.email
 HAVING COUNT(S.email)>=2;
 ---------------------------------------------------------------------
---3.
+--3.a
 --Sailors who have skipped everywhere in Portugal
 SELECT email FROM sailor
 EXCEPT ALL
@@ -35,6 +35,30 @@ EXCEPT ALL
     WHERE country_name_dest='Portugal')) --skippers who have travelled to a portuguese location
 ) as sailors_not_evry)
 ;
+
+---------------------------------------------------------------------
+--3.b
+--Sailors who have skipped everywhere in Portugal
+SELECT email FROM sailor
+EXCEPT ALL
+--sailors and portuguese locations where they've never been
+(SELECT email FROM
+(SELECT DISTINCT s.email,l.name
+FROM sailor s CROSS JOIN location l
+WHERE l.country_name='Portugal'
+EXCEPT ALL
+    --sailors who have been to some location in portugal (sailor,location)
+    ((SELECT DISTINCT a.sailor,it1.loc_name_origin as loc_name
+    FROM (trip t JOIN trip_info i ON t.takeoff=i.trip_start_date AND t.cni=i.cni_boat AND t.boat_country=i.country_name_boat) as it1
+        JOIN authorised a ON it1.reservation_start_date=a.start_date AND it1.cni=a.cni AND it1.reservation_end_date=a.end_date AND it1.boat_country=a.boat_country
+    WHERE country_name_origin='Portugal') --skippers who have travelled from a portuguese location
+    UNION
+    (SELECT DISTINCT a.sailor,it2.loc_name_dest as loc_name
+    FROM (trip t JOIN trip_info i ON t.takeoff=i.trip_start_date AND t.cni=i.cni_boat AND t.boat_country=i.country_name_boat) as it2
+        JOIN authorised a ON it2.reservation_start_date=a.start_date AND it2.cni=a.cni AND it2.reservation_end_date=a.end_date AND it2.boat_country=a.boat_country
+    WHERE country_name_dest='Portugal')) --skippers who have travelled to a portuguese location
+) as sailors_not_evry)
+;
 ---------------------------------------------------------------------
 --4.
 ---------------------------------------------------------------------
@@ -44,9 +68,20 @@ WHERE S.email IN (SELECT T.skipper FROM trip T
                                     GROUP BY T.skipper
                                     HAVING COUNT(T.skipper)>=ALL (SELECT count(skipper) FROM trip GROUP BY skipper));
 --------------------------------------------------------------------
---5.
+--5.a) Listing the sailors with the maximum sum of trip durations grouped by reservation
 --------------------------------------------------------------------
 
+SELECT aux.sailor,aux.duration_in_days
+FROM (SELECT a.sailor,SUM(arrival-takeoff) as duration_in_days,R.start_date,R.end_date,R.country,R.cni
+        FROM trip T JOIN reservation R ON T.reservation_start_date=R.start_date AND T.reservation_end_date=R.end_date AND T.boat_country=R.country AND T.cni=R.cni
+           JOIN authorised a ON t.reservation_start_date=a.start_date AND t.cni=a.cni AND t.reservation_end_date=a.end_date AND t.boat_country=a.boat_country
+        GROUP BY R.start_date,R.end_date,R.country,R.country,R.cni,a.sailor) AS aux
+WHERE aux.duration_in_days>=ALL(SELECT SUM(arrival-takeoff)
+        FROM trip T JOIN reservation R ON T.reservation_start_date=R.start_date AND T.reservation_end_date=R.end_date AND T.boat_country=R.country AND T.cni=R.cni
+           JOIN authorised a ON t.reservation_start_date=a.start_date AND t.cni=a.cni AND t.reservation_end_date=a.end_date AND t.boat_country=a.boat_country
+        GROUP BY R.start_date,R.end_date,R.country,R.country,R.cni,a.sailor);
+
+--5.b) Listing for each reservation, the skipper who skipped for the longest time (i.e. the skipper with the largest sum of trip durations for each reservation)
 SELECT aux.skipper,aux.duration_in_days
 FROM (SELECT T.skipper,SUM(arrival-takeoff) as duration_in_days,R.start_date,R.end_date,R.country,R.cni
         FROM trip T JOIN reservation R ON T.reservation_start_date=R.start_date AND T.reservation_end_date=R.end_date AND T.boat_country=R.country AND T.cni=R.cni
